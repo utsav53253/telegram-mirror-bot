@@ -1,21 +1,36 @@
 import os
-import subprocess
+import requests
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
+DOWNLOAD_FOLDER = "downloads"
+
+if not os.path.exists(DOWNLOAD_FOLDER):
+    os.makedirs(DOWNLOAD_FOLDER)
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    link = update.message.text
+    if update.message.document:
+        file = await update.message.document.get_file()
+        file_path = os.path.join(DOWNLOAD_FOLDER, update.message.document.file_name)
+        await file.download_to_drive(file_path)
+        await update.message.reply_text("File received. Upload feature coming next.")
 
-    await update.message.reply_text("Downloading...")
+    elif update.message.text:
+        link = update.message.text
+        await update.message.reply_text("Downloading link...")
 
-    # Download using aria2
-    subprocess.run(["aria2c", "-x", "8", "-s", "8", link])
+        filename = link.split("/")[-1]
+        file_path = os.path.join(DOWNLOAD_FOLDER, filename)
 
-    await update.message.reply_text("Download completed (test mode).")
+        r = requests.get(link)
+        with open(file_path, "wb") as f:
+            f.write(r.content)
+
+        await update.message.reply_text("Link downloaded successfully.")
 
 app = ApplicationBuilder().token(BOT_TOKEN).build()
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+app.add_handler(MessageHandler(filters.ALL, handle_message))
 
 app.run_polling()
